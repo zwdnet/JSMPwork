@@ -30,7 +30,7 @@ def fp(data):
     x_tt = newdata.loc[:, features].values
     # 填充空值
     if np.isnan(x_tt[:, :].sum()):
-            x_tt[:, :] = np.nan_to_num(x_tt[:, :]) + np.isnan(x_tt[:, :])
+            x_tt[:, :] = np.nan_to_num(x_tt[:, :]) + np.isnan(x_tt[:, :])*10.0
     newdata.update(pd.DataFrame(x_tt, columns = features))
     print(newdata.head())
     # 够造训练集的行动变量
@@ -60,7 +60,7 @@ def LR(data):
     print("test RMSE:", np.sqrt(metrics.mean_squared_error(test_action, test_pred)))
     # 保存模型到文件
     # joblib.dump(linreg, "LinesRegress.pkl")
-    with open("LinesRegress.pkl", "wb") as fw:
+    with open("./output/LinesRegress.pkl", "wb") as fw:
         pickle.dump(linreg, fw)
     print(test_pred)
     fig = plt.figure()
