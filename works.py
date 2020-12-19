@@ -19,6 +19,7 @@ from sklearn import metrics
 from sklearn.metrics import accuracy_score
 import optuna
 from optuna.samplers import TPESampler
+from sklearn.linear_model import LinearRegression
 
 import os
 import time
@@ -166,91 +167,62 @@ def modeling(train):
     print("开始建模")
     
     X_train = train.loc[:, train.columns.str.contains('feature')]
-    y_train = train.loc[:, 'action']
+    y_train = train.loc[:, 'resp']
     
     X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, random_state=666, test_size=0.2)
+    model = LinearRegression()
+    model.fit(X_train, y_train)
     
-    del train
+    return model
+
     
-    # X_train = X_train.fillna(-999)
-    sampler = TPESampler(seed=666)
-    tm = "auto"
+# 评分函数
+def Score(model, data):
+    # test_df = pd.read_csv("/kaggle/input/jane-street-market-prediction/train.csv")
+    data = data.fillna(-999)
+    X_test = data.loc[:, data.columns.str.contains('feature')]
+    resp = model.predict(X_test)
+    date = data["date"].values
+    weight = data["weight"].values
+    action = (resp > 0).astype("int")
     
-    def create_model(trial):
-        max_depth = trial.suggest_int("max_depth", 2, 12)
-        n_estimators = trial.suggest_int("n_estimators", 2, 600)
-        learning_rate = trial.suggest_uniform('learning_rate', 0.0001, 0.99)
-        subsample = trial.suggest_uniform('subsample', 0.0001, 1.0)
-        colsample_bytree = trial.suggest_uniform('colsample_bytree', 0.0000001, 1)
-        model = XGBClassifier(
-        n_estimators=n_estimators, 
-        max_depth=max_depth, 
-        learning_rate=learning_rate,
-        subsample=subsample,
-        colsample_bytree=colsample_bytree,
-        random_state=666,
-        tree_method=tm,
-        silent = 1
-        )
-        
-        return model
-        
-    def objective(trial):
-        model = create_model(trial)
-        model.fit(X_train, y_train)
-        score = accuracy_score(
-            y_train,
-            model.predict(X_train)
-            )
-        return score
-        
-    params1 = {
-        'max_depth': 8, 
-        'n_estimators': 500, 
-        'learning_rate': 0.01, 
-        'subsample': 0.9, 
-        'tree_method': tm,
-        'random_state': 666
-    }
-    
-    params3 = {
-        'max_depth': 10, 
-        'n_estimators': 500, 
-        'learning_rate': 0.03, 
-        'subsample': 0.9, 
-        'colsample_bytree': 0.7,
-        'tree_method': tm,
-        'random_state': 666
-    }
-    
-    start_time = time.time()
-    model1 = XGBClassifier(**params1)
-    model1.fit(X_train, y_train, eval_metric='auc')
-    model1.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_test, y_test)], eval_metric='auc',verbose=False)
-    evals_result = model1.evals_result()
-    print("模型1评分")
-    y_true, y_pred = y_test, model1.predict(X_test)
-    print("Accuracy : %.4g" % metrics.accuracy_score(y_true, y_pred))
-    
-    model3 = XGBClassifier(**params3)
-    model3.fit(X_train, y_train, eval_metric='auc')
-    model3.fit(X_train, y_train, eval_set=[(X_train, y_train), (X_test, y_test)], eval_metric='auc',verbose=False)
-    evals_result = model3.evals_result()
-    print("模型3评分")
-    y_true, y_pred = y_test, model3.predict(X_test)
-    print("Accuracy : %.4g" % metrics.accuracy_score(y_true, y_pred))
-    end_time = time.time()
-    print("建模时间:%.2f秒" % (end_time - start_time))
-    
-    return (model1, model3)
+    count_i = len(np.unique(date))
+    Pi = np.zeros(count_i)
+    # 用循环太慢
+    #for i, day in enumerate(np.unique(date)):
+#        Pi[i] = np.sum(weight[date == day] * resp[date == day] * action[date == day])
+    # 用下面这行代替
+    Pi = np.bincount(date, weight * resp * action)
+    t = np.sum(Pi) / np.sqrt(np.sum(Pi ** 2)) * np.sqrt(250 / count_i)
+    u = np.clip(t, 0, 6) * np.sum(Pi)
+    return u
 
 
 # 特征工程
 def featureEngineer(data):
     data = data[data['weight'] != 0]
-    data['action'] = ((data['weight'].values * data['resp'].values) > 0).astype('int')
     data = data.fillna(-999)
+    weight = data['weight'].values
+    resp = data['resp'].values
+    data['action'] = ((weight * resp) > 0).astype('int')
     return data
+    
+    
+# 进行预测，生成提交文件，求值版
+def predict_value(model):
+    env = janestreet.make_env()
+    iter_test = env.iter_test()
+    for (test_df, sample_prediction_df) in iter_test:
+        if test_df['weight'].item() > 0:
+            X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
+            X_test = X_test.fillna(-999)
+            y_resp = model.predict(X_test)[0]
+            y_preds = 0 if y_resp < 0 else 1
+        else:
+            y_preds = 0
+        # print(y_preds)
+        sample_prediction_df.action = y_preds
+        env.predict(sample_prediction_df)
 
 
 if __name__ == "__main__":
@@ -263,25 +235,13 @@ if __name__ == "__main__":
     # data_explore()
     
     # 真正开始干活
-    train = pd.read_csv("./train.csv", nrows = 1000)
+    train = pd.read_csv("./train.csv", nrows = 10000)
     train = featureEngineer(train)
-    
-    model1, model3 = modeling()
+    model = modeling(train)
+    # 计算模型评分
+    score = Score(model, train)
+    print("模型评分:%.2f" % score)
     
     # 进行预测
-    env = janestreet.make_env()
-    iter_test = env.iter_test()
-    for (test_df, sample_prediction_df) in iter_test:
-        if test_df['weight'].item() > 0:
-            X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
-            X_test = X_test.fillna(-999)
-            y_preds = model1.predict(X_test) + model3.predict(X_test)
-            if y_preds == 2:
-                y_preds = np.array([1])
-            else:
-                y_preds = np.array([0])
-        else:
-            y_preds = np.array([0])
-        sample_prediction_df.action = y_preds
-        env.predict(sample_prediction_df)
+    predict_value(model)
     
