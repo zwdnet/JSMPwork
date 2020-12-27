@@ -9,8 +9,10 @@ from functools import wraps
 def run(gpus, server):
     # 上传本目录所有文件再执行指定文件
     if gpus == "all":
-        # 清除服务器代码目录里所有源文件
+        # 清除服务器代码目录里所有源文件以及输出目录中的文件
         s = "ssh ubuntu@" + server + " \"sudo rm -rf ~/code/*.py\""
+        os.system(s)
+        s = "ssh ubuntu@" + server + " \"sudo rm -rf ~/code/output/*\""
         os.system(s)
         # 将本地目录所有文件上传至容器
         s = "scp -r ./*.py ubuntu@" + server + ":~/code"
@@ -22,10 +24,16 @@ def run(gpus, server):
         # 将代码目录里所有输出文件传回
         s = "scp -r ubuntu@" + server + ":~/code/output/* ./output/"
         os.system(s)
+    # 将所有结果文件传回
+    elif gpus == "copy":
+        s = "scp -r ubuntu@" + server + ":~/code/output/* ./output/"
+        os.system(s)
     # 上传指定文件并执行
     else:
-        ## 清除服务器代码目录里所有源文件
+        ## 清除服务器代码目录里所有源文件以及输出目录中的文件
         s = "ssh ubuntu@" + server + " \"sudo rm -rf ~/code/*.py\""
+        os.system(s)
+        s = "ssh ubuntu@" + server + " \"sudo rm -rf ~/code/output/*\""
         os.system(s)
         # 将本地目录指定文件上传至容器
         s = "scp " + sys.argv[1] + " ubuntu@" + server + ":~/code"
