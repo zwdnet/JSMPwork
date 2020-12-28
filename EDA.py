@@ -1619,12 +1619,7 @@ def EDA3(train, test, feature):
     from sklearn.ensemble import RandomForestRegressor
     regressor = RandomForestRegressor(max_features='auto')
     regressor.fit(X_train, y_train)
-	
-    import eli5
-    from eli5.sklearn import PermutationImportance
-    perm_import = PermutationImportance(regressor, random_state=1).fit(X_train, y_train)
-    # visualize the results
-    eli5.show_weights(perm_import, top=15, feature_names = X_train.columns.tolist())
+
 
 
 if __name__ == "__main__":
