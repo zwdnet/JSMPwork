@@ -3,6 +3,7 @@
 import os
 import sys
 from functools import wraps
+import time
 
 
 # 上传代码至服务器并运行
@@ -57,11 +58,24 @@ if __name__ == "__main__":
 # 工具函数，在上传到服务器上运行时改变当前目录
 def change_dir(func):
     @wraps(func)
-    def change():
+    def change(*args, **kwargs):
         oldpath = os.getcwd()
         newpath = "/home/code/"
         os.chdir(newpath)
-        func()
+        r = func(*args, **kwargs)
         os.chdir(oldpath)
+        return r
     return change
+    
+    
+# 工具函数，计算函数运行时间    
+def timethis(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        start = time.perf_counter()
+        r = func(*args, **kwargs)
+        end = time.perf_counter()
+        print('{}.{}的运行时间为 : {}秒'.format(func.__module__, func.__name__, end - start))
+        return r
+    return wrapper
     

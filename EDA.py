@@ -94,7 +94,9 @@ def data_explore():
     sns.set_style('darkgrid')
     pd.set_option('display.max_columns', None)
     pd.set_option('display.max_rows', None)
-    train_df = pd.read_csv("./train.csv", nrows = 300000)
+    # 抽样，读取1%数据
+    # 参考https://mp.weixin.qq.com/s/2LSKnN9R-N-I2HcHePT9zA
+    train_df = pd.read_csv("./train.csv", skiprows = lambda x: x>0 and np.random.rand() > 0.01)
     test_df = pd.read_csv("./example_test.csv")
     feature_df = pd.read_csv("./features.csv")
     
@@ -102,8 +104,8 @@ def data_explore():
     # 复制数据
     # train = train_df.copy()
     # test = test_df.copy()
-    #EDA1(train_df, test_df, feature_df)
-    #EDA2(train_df, test_df, feature_df)
+    EDA1(train_df, test_df, feature_df)
+    EDA2(train_df, test_df, feature_df)
     EDA3(train_df, test_df, feature_df)
     
     

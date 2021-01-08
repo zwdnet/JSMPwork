@@ -13,28 +13,38 @@ from sklearn.model_selection import train_test_split
 from sklearn import metrics
 from sklearn.metrics import accuracy_score
 import optuna
+# 逻辑回归
 from sklearn.linear_model import LinearRegression, LogisticRegression
+# 支持向量机
+from sklearn.svm import SVC, LinearSVC
+# 随机森林
+from sklearn.ensemble import RandomForestClassifier
+# KNN算法
+from sklearn.neighbors import KNeighborsClassifier
+# 朴素贝叶斯算法
+from sklearn.naive_bayes import GaussianNB
+# SGD算法
+from sklearn.linear_model import SGDClassifier
+# 决策树算法
+from sklearn.tree import DecisionTreeClassifier
 
 import os
 
 from EDA import data_explore
 from FE import featureEngineer
+from tools import *
 
     
     
-# 建模过程
-def modeling(train):
-    print("开始建模")
+# 建模前处理数据
+def preprocessing(train):
     X_train = train.loc[:, train.columns.str.contains('feature')]
     # y_train = train.loc[:, 'resp']
     y_train = train.loc[:, 'action']
     
     X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, random_state=666, test_size=0.2)
-    # model = LinearRegression()
-    model = LogisticRegression()
-    model.fit(X_train, y_train)
     
-    return model
+    return X_train, y_train
 
     
 # 评分函数
@@ -65,8 +75,9 @@ def predict_value(model):
     iter_test = env.iter_test()
     for (test_df, sample_prediction_df) in iter_test:
         if test_df['weight'].item() > 0:
+            test_df = featureEngineer(test_df)
             X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
-            X_test = X_test.fillna(-999)
+            # X_test = X_test.fillna(-999)
             y_resp = model.predict(X_test)[0]
             y_preds = 0 if y_resp < 0 else 1
         else:
@@ -82,15 +93,16 @@ def predict_clf(model):
     iter_test = env.iter_test()
     for (test_df, sample_prediction_df) in iter_test:
         if test_df['weight'].item() > 0:
+            test_df = featureEngineer(test_df)
             X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
-            X_test = X_test.fillna(-999)
+            X_test = X_test.fillna(0.0)
             y_preds = model.predict(X_test)[0]
         else:
             y_preds = 0
         # print(y_preds)
         sample_prediction_df.action = y_preds
         env.predict(sample_prediction_df)
-
+        
 
 if __name__ == "__main__":
     newpath = "/home/code"
@@ -99,14 +111,61 @@ if __name__ == "__main__":
     # data_explore()
     
     # 真正开始干活
-    train = pd.read_csv("./train.csv", nrows = 10000)
-    feature = pd.read_csv("./features.csv")
+    p = 0.01
+    train = loadData(p = p)
     train = featureEngineer(train)
-    model = modeling(train)
+    # print(train.head())
+    
     # 计算模型评分
     # score = Score(model, train)
     # print("模型评分:%.2f" % score)
+    test = loadData(p = p)
+    test = featureEngineer(test)
     
+    #训练数据预处理
+    X_train, y_train = preprocessing(train)
+    
+    # 逻辑回归
+    print("逻辑回归")
+    model = LogisticRegression(max_iter = 3000)
+    model.fit(X_train, y_train)
+    score(model, test, "Logist")
+    
+    # 支持向量机
+    print("支持向量机")
+    model = SVC()
+    model.fit(X_train, y_train)
+    score(model, test, "SVC")
+    
+    # 随机森林
+    print("随机森林")
+    model = RandomForestClassifier()
+    model.fit(X_train, y_train)
+    score(model, test, "RandomForest")
+    
+    # knn
+    print("knn")
+    model = KNeighborsClassifier(n_neighbors = 2)
+    model.fit(X_train, y_train)
+    score(model, test, "knn")
+    
+    # 朴素贝叶斯
+    print("朴素贝叶斯")
+    model = GaussianNB()
+    model.fit(X_train, y_train)
+    score(model, test, "Bayes")
+    
+    # SGD算法
+    print("SGD算法")
+    model = SGDClassifier()
+    model.fit(X_train, y_train)
+    score(model, test, "SGD")
+    
+    # 决策树
+    print("决策树算法")
+    model = DecisionTreeClassifier()
+    model.fit(X_train, y_train)
+    score(model, test, "DecisionTree")
     # 进行预测
-    predict_clf(model)
+    # predict_clf(model)
     
