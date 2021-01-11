@@ -40,8 +40,12 @@ def evalution(model, X, y_true):
 # 对模型评分
 @timethis
 def score(model, test, modelName):
-    X = test.loc[:, test.columns.str.contains("feature")].values
-    Y = test.action.values
+    if modelName == "XGBoost":
+        X = test.loc[:, test.columns.str.contains("feature")]
+        Y = test.action
+    else:
+        X = test.loc[:, test.columns.str.contains("feature")].values
+        Y = test.action.values
     model_score = model.score(X, Y)
     cross_score = cross_val(model, X, Y)
     report = evalution(model, X, Y)
