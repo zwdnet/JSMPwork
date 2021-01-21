@@ -13,25 +13,12 @@ import matplotlib.pyplot as plt
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
 from sklearn.metrics import accuracy_score
-import optuna
-# 逻辑回归
-from sklearn.linear_model import LinearRegression, LogisticRegression
-# 支持向量机
-from sklearn.svm import SVC, LinearSVC
-# 随机森林
-from sklearn.ensemble import RandomForestClassifier
-# KNN算法
-from sklearn.neighbors import KNeighborsClassifier
-# 朴素贝叶斯算法
-from sklearn.naive_bayes import GaussianNB
-# SGD算法
-from sklearn.linear_model import SGDClassifier
-# 决策树算法
-from sklearn.tree import DecisionTreeClassifier
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
 import os
 
-from EDA import data_explore
 from FE import featureEngineer
 from tools import *
 
@@ -43,7 +30,7 @@ def preprocessing(train):
     # y_train = train.loc[:, 'resp']
     y_train = train.loc[:, 'action']
     
-    X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, random_state=666, test_size=0.2)
+    # X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, random_state=666, test_size=0.2)
     
     return X_train, y_train
 
@@ -69,25 +56,7 @@ def Score(model, data):
     u = np.clip(t, 0, 6) * np.sum(Pi)
     return u
     
-    
-# 进行预测，生成提交文件，求值版
-def predict_value(model):
-    env = janestreet.make_env()
-    iter_test = env.iter_test()
-    for (test_df, sample_prediction_df) in iter_test:
-        if test_df['weight'].item() > 0:
-            test_df = featureEngineer(test_df)
-            X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
-            # X_test = X_test.fillna(-999)
-            y_resp = model.predict(X_test)[0]
-            y_preds = 0 if y_resp < 0 else 1
-        else:
-            y_preds = 0
-        # print(y_preds)
-        sample_prediction_df.action = y_preds
-        env.predict(sample_prediction_df)
-        
-        
+
 # 进行预测，生成提交文件，分类版
 def predict_clf(model):
     env = janestreet.make_env()
@@ -112,9 +81,10 @@ if __name__ == "__main__":
     # data_explore()
     
     # 真正开始干活
-    p = 0.01
+    p = 0.001
     train = loadData(p = p)
     train = featureEngineer(train)
+    print(train.info())
     # print(train.head())
     
     # 计算模型评分
@@ -124,49 +94,79 @@ if __name__ == "__main__":
     test = featureEngineer(test)
     
     #训练数据预处理
-    X_train, y_train = preprocessing(train)
+    x_train, y_train = preprocessing(train)
+    x_test, y_test = preprocessing(test)
     
-    # 逻辑回归
-    print("逻辑回归")
-    model = LogisticRegression(max_iter = 3000)
-    model.fit(X_train, y_train)
-    score(model, test, "Logist")
+    # 深度学习
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
-    # 支持向量机
-    print("支持向量机")
-    model = SVC()
-    model.fit(X_train, y_train)
-    score(model, test, "SVC")
+    x_tensor = torch.from_numpy(x_train.values).float().to(device)
+    y_tensor = torch.from_numpy(y_train.values).float().to(device)
     
-    # 随机森林
-    print("随机森林")
-    model = RandomForestClassifier()
-    model.fit(X_train, y_train)
-    score(model, test, "RandomForest")
+    # 建立模型
+    # https://blog.csdn.net/weixin_44841652/article/details/105125826
+    class Model(nn.Module):
+        def __init__(self):
+            super(Model, self).__init__()
+            self.linear1 = nn.Linear(130, 65) 
+            self.linear2 = nn.Linear(65, 30)
+            self.linear3 = nn.Linear(30, 1)
+            # self.linear4 = nn.Linear(25, 10)
+            #self.linear4 = nn.Linear(10, 1)
+            self.sigmoid = nn.Sigmoid()
+        
+        def forward(self, x):
+            x = self.sigmoid(self.linear1(x))
+            x = self.sigmoid(self.linear2(x))
+            x = self.sigmoid(self.linear3(x))
+            # x = self.sigmoid(self.linear4(x))
+            # x = self.sigmoid(self.linear5(x))
+            return x
+            
+    model = Model().to(device)
+    print(model.state_dict())
+    # 设置超参数
+    lr = 0.1
+    n_epochs = 1000
+     
+    # loss_fn = nn.BCELoss(reduction='sum')
+    loss_fn = nn.MSELoss(reduction = "mean")
+    optimizer = optim.SGD(model.parameters(), lr = lr)
+    # 创建训练器
+    train_step = make_train_step(model, loss_fn, optimizer)
+    losses = []
     
-    # knn
-    print("knn")
-    model = KNeighborsClassifier(n_neighbors = 2)
-    model.fit(X_train, y_train)
-    score(model, test, "knn")
-    
-    # 朴素贝叶斯
-    print("朴素贝叶斯")
-    model = GaussianNB()
-    model.fit(X_train, y_train)
-    score(model, test, "Bayes")
-    
-    # SGD算法
-    print("SGD算法")
-    model = SGDClassifier()
-    model.fit(X_train, y_train)
-    score(model, test, "SGD")
-    
-    # 决策树
-    print("决策树算法")
-    model = DecisionTreeClassifier()
-    model.fit(X_train, y_train)
-    score(model, test, "DecisionTree")
+    print("开始训练")
+    # 进行训练
+    for epoch in range(n_epochs):
+        # y_tensor = y_tensor.detach()
+        loss = train_step(x_tensor, y_tensor)
+        losses.append(loss)
+        
+    print(model.state_dict())
+    print(losses)
+    plt.figure()
+    plt.plot(losses)
+    plt.savefig("./output/loss.png")
+    # 验证模型
+    x_test_tensor = torch.from_numpy(x_test.values).float().to(device)
+    y_test_tensor = torch.from_numpy(y_test.values).float().to(device)
+    result = []
+    N = 100
+    for x in model(x_test_tensor[:N]):
+        if x >= 0.5:
+            result.append(1)
+        else:
+            result.append(0)
+    y_test = y_test_tensor[:N].numpy()
+    print(len(y_test))
+    print(result)
+    count = 0
+    for i in range(len(result)):
+        if y_test[i] == result[i]:
+            count += 1
+    print(count)
+    print("预测正确率:%f" % (count/N))
     # 进行预测
     # predict_clf(model)
     

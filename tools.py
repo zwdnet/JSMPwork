@@ -101,3 +101,30 @@ def Lc(model, modelName, X, y, ylim = None, cv = None, n_jobs = 1, train_sizes =
     plt.legend(loc="best")
     plt.savefig("./output/" + modelName + "_Learning Curve.png")
     
+    
+# 工具函数，返回神经网络训练的每一步
+def make_train_step(model, loss_fn, optimizer):
+    # 执行在循环中训练过程
+    def train_step(x, y):
+        # 设置训练模式
+        model.train()
+        # 预测
+        yhat = model(x)
+        # 计算损失
+        # print("测试")
+        yhat = yhat.squeeze(-1)
+        # print(yhat.shape, y.shape)
+        loss = loss_fn(yhat, y)
+        # 计算梯度
+        loss.backward()
+        # 更新参数，梯度置零
+        optimizer.step()
+        optimizer.zero_grad()
+        # 返回损失值
+        return loss.item()
+        
+    # 返回在训练循环中调用的函数
+    return train_step
+        
+
+    
