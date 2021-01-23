@@ -329,7 +329,6 @@ def testMyFrame(X_, Y_):
     return (W1, b1, W2, b2, losses)
             
     
-    
 # 测试pytorch
 @change_dir
 @timethis
