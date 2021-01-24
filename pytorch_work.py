@@ -63,7 +63,7 @@ def predict_clf(model):
     iter_test = env.iter_test()
     for (test_df, sample_prediction_df) in iter_test:
         if test_df['weight'].item() > 0:
-            test_df = featureEngineer(test_df)
+            # test_df = featureEngineer(test_df)
             X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
             X_test = X_test.fillna(0.0)
             y_preds = model.predict(X_test)[0]
@@ -81,7 +81,7 @@ if __name__ == "__main__":
     # data_explore()
     
     # 真正开始干活
-    p = 0.001
+    p = 0.0001
     train = loadData(p = p)
     train = featureEngineer(train)
     print(train.info())
@@ -103,37 +103,26 @@ if __name__ == "__main__":
     x_tensor = torch.from_numpy(x_train.values).float().to(device)
     y_tensor = torch.from_numpy(y_train.values).float().to(device)
     
-    # 建立模型
-    # https://blog.csdn.net/weixin_44841652/article/details/105125826
-    class Model(nn.Module):
-        def __init__(self):
-            super(Model, self).__init__()
-            self.linear1 = nn.Linear(130, 65) 
-            self.linear2 = nn.Linear(65, 30)
-            self.linear3 = nn.Linear(30, 1)
-            # self.linear4 = nn.Linear(25, 10)
-            #self.linear4 = nn.Linear(10, 1)
-            self.sigmoid = nn.Sigmoid()
-        
-        def forward(self, x):
-            x = self.sigmoid(self.linear1(x))
-            x = self.sigmoid(self.linear2(x))
-            x = self.sigmoid(self.linear3(x))
-            # x = self.sigmoid(self.linear4(x))
-            # x = self.sigmoid(self.linear5(x))
-            return x
+
+    Model = nn.Sequential(
+            nn.Linear(130, 118),
+            nn.ReLU(),
+            nn.Linear(118, 142),
+            nn.Sigmoid(),
+            nn.Linear(142, 1)
+    ).to(device)
             
-    model = Model().to(device)
-    print(model.state_dict())
+    # model = Model(x_tensor).to(device)
+    # print(model.state_dict())
     # 设置超参数
-    lr = 0.1
-    n_epochs = 1000
+    lr = 0.000678
+    n_epochs = 110
      
     # loss_fn = nn.BCELoss(reduction='sum')
     loss_fn = nn.MSELoss(reduction = "mean")
-    optimizer = optim.SGD(model.parameters(), lr = lr)
+    optimizer = optim.Adam(Model.parameters(), lr = lr)
     # 创建训练器
-    train_step = make_train_step(model, loss_fn, optimizer)
+    train_step = make_train_step(Model, loss_fn, optimizer)
     losses = []
     
     print("开始训练")
@@ -143,7 +132,7 @@ if __name__ == "__main__":
         loss = train_step(x_tensor, y_tensor)
         losses.append(loss)
         
-    print(model.state_dict())
+    # print(model.state_dict())
     print(losses)
     plt.figure()
     plt.plot(losses)
@@ -152,21 +141,20 @@ if __name__ == "__main__":
     x_test_tensor = torch.from_numpy(x_test.values).float().to(device)
     y_test_tensor = torch.from_numpy(y_test.values).float().to(device)
     result = []
-    N = 100
-    for x in model(x_test_tensor[:N]):
+    for x in Model(x_test_tensor):
         if x >= 0.5:
             result.append(1)
         else:
             result.append(0)
-    y_test = y_test_tensor[:N].numpy()
-    print(len(y_test))
-    print(result)
+    y_test = y_test_tensor.numpy()
+    # print(len(y_test))
+    # print(result)
     count = 0
     for i in range(len(result)):
         if y_test[i] == result[i]:
             count += 1
     print(count)
-    print("预测正确率:%f" % (count/N))
+    print("预测正确率:%f" % (count/len(y_test)))
     # 进行预测
     # predict_clf(model)
     
