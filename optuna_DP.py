@@ -76,6 +76,28 @@ def predict_clf(model):
         env.predict(sample_prediction_df)
         
         
+# 进行预测，生成提交文件，神经网络模型版
+def predict_nn(model):
+    env = janestreet.make_env()
+    iter_test = env.iter_test()
+    for (test_df, sample_prediction_df) in iter_test:
+        if test_df['weight'].item() > 0:
+            # test_df = featureEngineer(test_df)
+            X_test = test_df.loc[:, test_df.columns.str.contains('feature')]
+            X_test = X_test.fillna(0.0)
+            X_test_tensor = torch.from_numpy(X_test.values).float().to(device)
+            pred = model(X_test_tensor).detach().cpu().numpy()
+            if pred >= 0.5:
+                y_preds = 1
+            else:
+                y_preds = 0
+        else:
+            y_preds = 0
+        # print(y_preds)
+        sample_prediction_df.action = y_preds
+        env.predict(sample_prediction_df)
+        
+        
 # 获取数据
 def getData():
     p = 0.1
