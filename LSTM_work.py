@@ -77,14 +77,21 @@ def predict_clf(model):
 class LstmRNN(nn.Module):
     def __init__(self, input_size, hidden_size = 10, output_size = 1, num_layers = 1):
         super().__init__()
+        self.linear = nn.Linear(input_size, hidden_size)
         self.lstm = nn.LSTM(input_size, hidden_size, num_layers)
         self.forwardCalculation = nn.Linear(hidden_size, output_size)
+        self.sigmoid = nn.Sigmoid()
         
     def forward(self, _x):
+        # s, b, h = _x.shape
+        # x = _x.view(s*b, h)
+        # x = self.linear(x)
+        # x = x.view(s, b, h)
         x, _ = self.lstm(_x)
         s, b, h = x.shape # seq_len, batch, hidden_size
         x = x.view(s*b, h)
         x = self.forwardCalculation(x)
+        x = self.sigmoid(x)
         x = x.view(s, b, -1)
         return x
         
@@ -153,7 +160,12 @@ if __name__ == "__main__":
     x_test_tensor = torch.from_numpy(x_test.values.reshape(-1, 1, 130)).float().to(device)
     y_test_tensor = torch.from_numpy(y_test.values.reshape(-1, 1, 1)).float().to(device)
     result = []
+    preds = []
+    # dph = 0.0
     for x in Model(x_test_tensor):
+        preds.append(x.detach().cpu().numpy()[0][0])
+        # dph = np.min(preds) + (np.max(preds) - np.min(preds))/2.0
+        # print(dph)
         if x >= 0.5:
             result.append(1)
         else:
@@ -161,6 +173,13 @@ if __name__ == "__main__":
     y_test = y_test_tensor.numpy()
     # print(len(y_test))
     # print(result)
+    plt.figure()
+    plt.hist(preds)
+    plt.savefig("./output/predicts.png")
+    plt.close()
+    print("预测结果均值:{}".format(np.mean(preds)))
+    print("预测结果中位数:{}".format(np.median(preds)))
+    print("预测结果极值之差:{}-{}={}".format(np.max(preds), np.min(preds), np.max(preds) - np.min(preds)))
     count = 0
     for i in range(len(result)):
         if y_test[i] == result[i]:
